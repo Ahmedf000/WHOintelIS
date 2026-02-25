@@ -1,37 +1,3 @@
-"""
-project walkthrough and pseudocode
-so the climax question is "Who owns this IP/domain and Where is it"
-
-1st: --> runs on domain
-WHO is
-https://www.whois.com/whois/github.com OR by using whois module (require installation)
-that will return registered date - expires - latest update
-registrar - org and country
-
-2nd: --> runs on IP
-ASN - autonomous system number
-AS are the big networks  - Every computer or device that connects to the Internet is connected to an AS.
-each AS is operated by a single large organization, such as an Internet service provider (ISP),
-a large enterprise technology company, a university, or a government agency.
-
-autonomous system number (ASN), similar to how every business has a business
-license with an unique, official number.
-
-Organization (e.g., Google) // if ASN the car you own, Then the IP block (networks prefixs) are cars you own
-    └─ ASN (AS15169) ← unique ID
-        ├─ IP Block 1: 8.8.8.0/24
-        ├─ IP Block 2: 142.250.0.0/15
-        ├─ IP Block 3: 172.217.0.0/16
-        └─ (hundreds more...)
-
-
-3rd: --> runs on IP
-geolocation which the physical location (ciy, country, ISP)
-http://ip-api.com/json/{ip} OR
-- `ipinfo.io` (requires free API key)
-- `ipgeolocation.io` (requires free API key)
-"""
-
 import whois
 import argparse
 import requests
@@ -40,6 +6,7 @@ import time
 import socket
 from rich.console import Console
 from rich.table import Table
+from rich.panel import Panel
 
 
 def display_results(domain, ip, whois_data, asn_data, geo_data):
@@ -53,7 +20,6 @@ def display_results(domain, ip, whois_data, asn_data, geo_data):
         console.print(f"[bold]Target Domain:[/bold] [cyan]{domain}[/cyan]")
     console.print(f"[bold]Resolved IP:[/bold] [green]{ip}[/green]\n")
 
-    # WHOIS Section
     if 'error' not in whois_data:
         console.print(Panel.fit(
             f"[bold]Domain:[/bold] {whois_data['domain_name']}\n"
@@ -68,7 +34,6 @@ def display_results(domain, ip, whois_data, asn_data, geo_data):
     else:
         console.print(f"[yellow]⚠ {whois_data['error']}[/yellow]\n")
 
-    # ASN Section
     if 'error' not in asn_data:
         console.print(Panel.fit(
             f"[bold]ASN:[/bold] {asn_data['asn']}\n"
@@ -103,7 +68,6 @@ def display_results(domain, ip, whois_data, asn_data, geo_data):
 
 
 def domain_solve(ip_address):
-    """This solve by socket will work for WHOIS as it requires a domain"""
     try:
         resolver = socket.gethostbyname(ip_address)
         return resolver
@@ -127,13 +91,13 @@ def whois_lookup(domain):
             expiration = expiration[0]
 
         lookup_Info = {
-                'Domain_Name': who_lookup.domain_name if who_lookup.domain_name else "N/A",
-                'Registrar_Info': who_lookup.registrar if who_lookup.registrar else "N/A",
-                'creation_date': str(creation) if creation else "N/A",
-                'expiration_date': str(expiration) if expiration else "N/A",
-                'org': who_lookup.org if who_lookup.org else "N/A",
-                'country': who_lookup.country if who_lookup.country else "N/A"
-            }
+            'domain_name': who_lookup.domain_name if who_lookup.domain_name else "N/A",  # ← lowercase with underscore
+            'registrar': who_lookup.registrar if who_lookup.registrar else "N/A",  # ← match display_results
+            'creation_date': str(creation) if creation else "N/A",
+            'expiration_date': str(expiration) if expiration else "N/A",
+            'org': who_lookup.org if who_lookup.org else "N/A",
+            'country': who_lookup.country if who_lookup.country else "N/A"
+        }
 
         return lookup_Info
 
@@ -206,18 +170,21 @@ def geolocation_finding(ip_address):
     except requests.RequestException as e:
         return {'error': f"Geolocation request failed: {str(e)}"}
 
-def main():
-    parser = argparse.ArgumentParser(description="Domain - IP address Lookup Tool")
-    parser.add_argument("-w","--whois", help="Domain to search")
-    parser.add_argument("-a","--asn_lookup", help="ASN to search")
-    parser.add_argument("-g","--geolocation", help="Geolocation to search")
-    args = parser.parse_args()
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="WHOintelIS - Domain/IP Intelligence Tool",
+        epilog="Example: python main.py -t google.com"
+    )
+
+    parser.add_argument("-t", "--target",
+                        help="Domain or IP to investigate",
+                        required=True)
+
+    args = parser.parse_args()
     target = args.target
 
-    # Determine if input is domain or IP
     is_domain = not all(c.isdigit() or c == '.' for c in target)
-
     ip = domain_solve(target)
 
     print(f"\n[*] Gathering intelligence on: {target}")
@@ -231,15 +198,12 @@ def main():
         whois_data = {'error': 'WHOIS lookup requires a domain, not an IP'}
 
     print("[*] Running ASN lookup...")
-    asn_data = (ip)
+    asn_data = ASN_lookup(ip)
 
     print("[*] Running geolocation lookup...")
-    geo_data = geolocation_lookup(ip)
+    geo_data = geolocation_finding(ip)
 
-    # Display results
     display_results(target if is_domain else None, ip, whois_data, asn_data, geo_data)
-
 
 if __name__ == "__main__":
     main()
-
