@@ -32,7 +32,7 @@ def display_results(domain, ip, whois_data, asn_data, geo_data):
             border_style="magenta"
         ))
     else:
-        console.print(f"[yellow]⚠ {whois_data['error']}[/yellow]\n")
+        console.print(f"[yellow] {whois_data['error']}[/yellow]\n")
 
     if 'error' not in asn_data:
         console.print(Panel.fit(
@@ -47,7 +47,7 @@ def display_results(domain, ip, whois_data, asn_data, geo_data):
             border_style="cyan"
         ))
     else:
-        console.print(f"[yellow]⚠ {asn_data['error']}[/yellow]\n")
+        console.print(f"[yellow] {asn_data['error']}[/yellow]\n")
 
     if 'error' not in geo_data:
         console.print(Panel.fit(
@@ -62,7 +62,7 @@ def display_results(domain, ip, whois_data, asn_data, geo_data):
             border_style="green"
         ))
     else:
-        console.print(f"[yellow]⚠ {geo_data['error']}[/yellow]\n")
+        console.print(f"[yellow] {geo_data['error']}[/yellow]\n")
 
     console.print(f"[bold cyan]═══════════════════════════════════════════════[/bold cyan]\n")
 
@@ -91,8 +91,8 @@ def whois_lookup(domain):
             expiration = expiration[0]
 
         lookup_Info = {
-            'domain_name': who_lookup.domain_name if who_lookup.domain_name else "N/A",  # ← lowercase with underscore
-            'registrar': who_lookup.registrar if who_lookup.registrar else "N/A",  # ← match display_results
+            'domain_name': who_lookup.domain_name if who_lookup.domain_name else "N/A",
+            'registrar': who_lookup.registrar if who_lookup.registrar else "N/A",
             'creation_date': str(creation) if creation else "N/A",
             'expiration_date': str(expiration) if expiration else "N/A",
             'org': who_lookup.org if who_lookup.org else "N/A",
