@@ -42,26 +42,73 @@ from rich.console import Console
 from rich.table import Table
 
 
-def design_table(lookup_results):
-
-    if not lookup_results:
-        print("No results to be displayed")
-        return
-
+def display_results(domain, ip, whois_data, asn_data, geo_data):
     console = Console()
-    table = Table(show_header=True, header_style="bold blue", title_style="WHOintellIS results")
-    table.add_column("WHOIS_Lookup", style="green")
-    table.add_column("ASN_Lookup", style="cyan")
-    table.add_column("GEOLOCATION_lookup", style="yellow")
 
+    console.print(f"\n[bold cyan]═══════════════════════════════════════════════[/bold cyan]")
+    console.print(f"[bold white]         WHOintelIS Intelligence Report[/bold white]")
+    console.print(f"[bold cyan]═══════════════════════════════════════════════[/bold cyan]\n")
 
-    console.print(table)
+    if domain:
+        console.print(f"[bold]Target Domain:[/bold] [cyan]{domain}[/cyan]")
+    console.print(f"[bold]Resolved IP:[/bold] [green]{ip}[/green]\n")
+
+    # WHOIS Section
+    if 'error' not in whois_data:
+        console.print(Panel.fit(
+            f"[bold]Domain:[/bold] {whois_data['domain_name']}\n"
+            f"[bold]Registrar:[/bold] {whois_data['registrar']}\n"
+            f"[bold]Organization:[/bold] {whois_data['org']}\n"
+            f"[bold]Country:[/bold] {whois_data['country']}\n"
+            f"[bold]Created:[/bold] {whois_data['creation_date']}\n"
+            f"[bold]Expires:[/bold] {whois_data['expiration_date']}",
+            title="[bold magenta]WHOIS Information[/bold magenta]",
+            border_style="magenta"
+        ))
+    else:
+        console.print(f"[yellow]⚠ {whois_data['error']}[/yellow]\n")
+
+    # ASN Section
+    if 'error' not in asn_data:
+        console.print(Panel.fit(
+            f"[bold]ASN:[/bold] {asn_data['asn']}\n"
+            f"[bold]Description:[/bold] {asn_data['asn_description']}\n"
+            f"[bold]Network Name:[/bold] {asn_data['network_name']}\n"
+            f"[bold]IP Block (CIDR):[/bold] {asn_data['network_cidr']}\n"
+            f"[bold]Range:[/bold] {asn_data['start_address']} - {asn_data['end_address']}\n"
+            f"[bold]Country:[/bold] {asn_data['country']}\n"
+            f"[bold]Last Changed:[/bold] {asn_data['last_changed']}",
+            title="[bold cyan]ASN Information[/bold cyan]",
+            border_style="cyan"
+        ))
+    else:
+        console.print(f"[yellow]⚠ {asn_data['error']}[/yellow]\n")
+
+    if 'error' not in geo_data:
+        console.print(Panel.fit(
+            f"[bold]City:[/bold] {geo_data['city']}\n"
+            f"[bold]Region:[/bold] {geo_data['region']}\n"
+            f"[bold]Country:[/bold] {geo_data['country']}\n"
+            f"[bold]ISP:[/bold] {geo_data['isp']}\n"
+            f"[bold]Organization:[/bold] {geo_data['org']}\n"
+            f"[bold]Coordinates:[/bold] {geo_data['lat']}, {geo_data['lon']}\n"
+            f"[bold]Timezone:[/bold] {geo_data['timezone']}",
+            title="[bold green]Geolocation[/bold green]",
+            border_style="green"
+        ))
+    else:
+        console.print(f"[yellow]⚠ {geo_data['error']}[/yellow]\n")
+
+    console.print(f"[bold cyan]═══════════════════════════════════════════════[/bold cyan]\n")
 
 
 def domain_solve(ip_address):
     """This solve by socket will work for WHOIS as it requires a domain"""
-    resolver = socket.gethostbyname(ip_address)
-    return resolver
+    try:
+        resolver = socket.gethostbyname(ip_address)
+        return resolver
+    except socket.gaierror:
+        return ip_address
 
 
 
@@ -69,42 +116,55 @@ def whois_lookup(domain):
     get_domain = domain_solve(domain)
 
     try:
-        who_lookup = whois.whois(domain)
+        who_lookup = whois.whois(get_domain)
+
+        creation = who_lookup.creation_date
+        if isinstance(creation, list):
+            creation = creation[0]
+
+        expiration = who_lookup.expiration_date
+        if isinstance(expiration, list):
+            expiration = expiration[0]
+
         lookup_Info = {
-            'Domain_Name': who_lookup.domain_name,
-            'Registrar_Info': who_lookup.registrar,
-            'Creation_Date':who_lookup.creation_date[0],
-            'Expiration_Date': who_lookup.expiration_date[0],
-        }
+                'Domain_Name': who_lookup.domain_name if who_lookup.domain_name else "N/A",
+                'Registrar_Info': who_lookup.registrar if who_lookup.registrar else "N/A",
+                'creation_date': str(creation) if creation else "N/A",
+                'expiration_date': str(expiration) if expiration else "N/A",
+                'org': who_lookup.org if who_lookup.org else "N/A",
+                'country': who_lookup.country if who_lookup.country else "N/A"
+            }
 
         return lookup_Info
 
     except Exception as e:
-        return f"Could not Complete the Lookup: {str(e)}"
+            return f"Could not Complete the Lookup: {str(e)}"
 
 
 
 
 def ASN_lookup(ip_address):
 
-    obj = IPWhois(ip_address)
-    results = obj.lookup_rdap()
-
     try:
+        obj = IPWhois(ip_address)
+        results = obj.lookup_rdap()
+
+        last_changed = "N/A"
+        if results.get('network', {}).get('events'):
+            events = results['network']['events']
+            if isinstance(events, list) and len(events) > 0:
+                last_changed = events[0].get('timestamp', 'N/A')
+
         asn_lookup = {
-            'Autonomous_System Number': results['asn'],
-            'ASN Network': {
-                'ANS Cidr':results['asn_cidr'],
-                'Network Status': results['network']['status'],
-                'Start Address': results['network']['start_address'],
-                'End Address': results['network']['end_address'],
-                'Name': results['network']['name'],
-                'Kind': results['network']['contact']['kind'],
-            },
-            'Description': results['asn_description'],
-            'Modifications': {
-                'Last Changed': results['network']['events']['timestamp'],
-            }
+            'asn': f"AS{results.get('asn', 'N/A')}",
+            'asn_description': results.get('asn_description', 'N/A'),
+            'asn_cidr': results.get('asn_cidr', 'N/A'),
+            'network_cidr': results.get('network', {}).get('cidr', 'N/A'),
+            'network_name': results.get('network', {}).get('name', 'N/A'),
+            'start_address': results.get('network', {}).get('start_address', 'N/A'),
+            'end_address': results.get('network', {}).get('end_address', 'N/A'),
+            'country': results.get('asn_country_code', 'N/A'),
+            'last_changed': last_changed
         }
 
     except Exception as e:
@@ -119,26 +179,32 @@ def geolocation_finding(ip_address):
 
     import json
 
-    url1 = f'https://ip-api.com/{ip_address}'
     try:
-        geo_request = requests.get(url1)
-        response = geo_request.json()
-        js = json.dumps(response, indent=4)
+        url = f'http://ip-api.com/json/{ip_address}'
+        geo_request = requests.get(url, timeout=3)
 
-        if geo_request.status_code == 404 and geo_request.status_code == 403:
-            return f"Could not get a response back due to an Error"
-        if geo_request.status_code == 500:
-            return f"Could not get a response back due to an Server Error"
+        if geo_request.status_code == 200:
+            data = geo_request.json()
 
-    except Exception as e:
-        return f"Could not Complete the Geolocation Finding: {str(e)}"
-    except requests.exceptions.RequestException as e:
-        return f"Could not form successful request: {str(e)}"
+            if data.get('status') == 'success':
+                geo_data = {
+                    'city': data.get('city', 'N/A'),
+                    'region': data.get('regionName', 'N/A'),
+                    'country': data.get('country', 'N/A'),
+                    'isp': data.get('isp', 'N/A'),
+                    'org': data.get('org', 'N/A'),
+                    'lat': data.get('lat', 'N/A'),
+                    'lon': data.get('lon', 'N/A'),
+                    'timezone': data.get('timezone', 'N/A')
+                }
+                return geo_data
+            else:
+                return {'error': f"Geolocation failed: {data.get('message', 'Unknown error')}"}
+        else:
+            return {'error': f"HTTP {geo_request.status_code}"}
 
-    return js
-
-
-
+    except requests.RequestException as e:
+        return {'error': f"Geolocation request failed: {str(e)}"}
 
 def main():
     parser = argparse.ArgumentParser(description="Domain - IP address Lookup Tool")
@@ -147,34 +213,33 @@ def main():
     parser.add_argument("-g","--geolocation", help="Geolocation to search")
     args = parser.parse_args()
 
-    import sys
-    if len(sys.argv) < 1:
-        print(f"Please use main.py -h")
-        sys.exit(1)
+    target = args.target
 
-    extension = ['com','net','org']
-    for ext in extension:
-        if ext in args.whois:
-            clean_domain = []
-            split_prefix = args.whois.split('.')
-            clean_domain.append(split_prefix[1])
-            clean_domain.append(split_prefix[2])
-            get_correct = '.'.join(clean_domain)
+    # Determine if input is domain or IP
+    is_domain = not all(c.isdigit() or c == '.' for c in target)
 
-            whois_lookups = whois_lookup(get_correct)
-        else:
-            ip_to_domain = domain_solve(args.whois)
-            whois_lookups = whois_lookup(ip_to_domain)
+    ip = domain_solve(target)
 
+    print(f"\n[*] Gathering intelligence on: {target}")
+    print(f"[*] Resolved IP: {ip}\n")
 
-    if args.asn_lookup:
-        asn_search = ASN_lookup(args.asn_lookup)
+    whois_data = {}
+    if is_domain:
+        print("[*] Running WHOIS lookup...")
+        whois_data = whois_lookup(target)
+    else:
+        whois_data = {'error': 'WHOIS lookup requires a domain, not an IP'}
 
+    print("[*] Running ASN lookup...")
+    asn_data = (ip)
 
-    if args.geolocation:
-        location_lookup = geolocation_finding(args.geolocation)
+    print("[*] Running geolocation lookup...")
+    geo_data = geolocation_lookup(ip)
 
+    # Display results
+    display_results(target if is_domain else None, ip, whois_data, asn_data, geo_data)
 
 
 if __name__ == "__main__":
     main()
+
